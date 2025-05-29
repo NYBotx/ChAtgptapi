@@ -1,56 +1,63 @@
-<?php
-// Define the external API URL
-$apiUrl = 'https://nexus.0-0-0.click/';
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const backup = url.searchParams.get("backup");
+    const msg = url.searchParams.get("msg");
 
-// Fetch query parameters 'backup' and 'msg'
-$userId = isset($_GET['backup']) ? $_GET['backup'] : null;
-$msg = isset($_GET['msg']) ? $_GET['msg'] : null;
+    // Validate query parameters
+    if (!backup || !msg) {
+      return new Response(
+        JSON.stringify({ error: "Both backup and msg parameters are required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
-// Check if both parameters are provided
-if (!$userId || !$msg) {
-    header('Content-Type: application/json');
-    echo json_encode(['error' => 'Both backup and msg parameters are required']);
-    http_response_code(400);
-    exit;
-}
+    // Build request URL to external API
+    const apiUrl = `https://nexus.0-0-0.click/?backup=${encodeURIComponent(backup)}&msg=${encodeURIComponent(msg)}`;
 
-// Construct the URL with query parameters
-$requestUrl = $apiUrl . '?backup=' . urlencode($userId) . '&msg=' . urlencode($msg);
+    try {
+      const apiResponse = await fetch(apiUrl);
+      
+      // If the response isn't OK, return a custom error
+      if (!apiResponse.ok) {
+        return new Response(
+          JSON.stringify({
+            status: false,
+            message: "RESPONSE NOT FOUND, DUE TO ERROR PLEASE TRY AGAIN LATER",
+            owner: "@REFLEX_COD3R",
+            backupId: backup
+          }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
 
-// Initialize a cURL session
-$ch = curl_init($requestUrl);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      const data = await apiResponse.json();
 
-// Execute the request and fetch the response
-$response = curl_exec($ch);
-curl_close($ch);
+      // Final response
+      const result = {
+        status: true,
+        message: data.message || "No message",
+        owner: "@REFLEX_COD3R",
+        backupId: backup,
+        chatID: data.id || null
+      };
 
-// Check if cURL request was successful
-if ($response === false) {
-    header('Content-Type: application/json');
-    echo json_encode([
-        'status' => false,
-        'message' => 'RESPONSE NOT FOUND, DUE TO ERROR PLEASE TRY AGAIN LATER',
-        'owner' => '@REFLEX_COD3R',
-        'backupId' => $userId
-    ]);
-    http_response_code(500);
-    exit;
-}
+      return new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json" }
+      });
 
-// Decode the JSON response from the external API
-$responseData = json_decode($response, true);
-
-// Prepare the response data
-$result = [
-    'status' => true,
-    'message' => $responseData['message'] ?? 'No message',
-    'owner' => '@REFLEX_COD3R',
-    'backupId' => $userId,
-    'chatID' => $responseData['id'] ?? null
-];
-
-// Send JSON response
-header('Content-Type: application/json');
-echo json_encode($result);
-?>
+    } catch (error) {
+      // Catch network/JSON errors
+      return new Response(
+        JSON.stringify({
+          status: false,
+          message: "Failed to fetch or parse API response",
+          error: error.message,
+          owner: "@REFLEX_COD3R",
+          backupId: backup
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+};
